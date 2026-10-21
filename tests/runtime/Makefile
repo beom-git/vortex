@@ -22,7 +22,7 @@ CXXFLAGS += $(XCONFIGS)
 
 LDFLAGS += -Wl,-rpath,$(RT_DIR) -L$(RT_DIR) -lvortex -pthread
 
-TESTS := test_basic test_async test_timeline_events test_module_kernel test_rect_fill
+TESTS := test_basic test_async test_timeline_events test_module_kernel test_rect_fill test_close
 
 .PHONY: all run run-simx run-xrt clean
 
@@ -42,6 +42,12 @@ test_module_kernel: $(VORTEX_HOME)/tests/runtime/test_module_kernel.cpp
 
 test_rect_fill: $(VORTEX_HOME)/tests/runtime/test_rect_fill.cpp
 	$(CXX) $(CXXFLAGS) $< $(LDFLAGS) -o $@
+
+libvortex-close_test.so: $(VORTEX_HOME)/tests/runtime/close_backend.cpp $(VORTEX_HOME)/sw/runtime/common/callbacks.h $(VORTEX_HOME)/sw/runtime/common/vortex2_internal.h
+	$(CXX) $(CXXFLAGS) -I$(VORTEX_HOME)/sw/runtime/common -I$(VORTEX_HOME)/sw/common $< -shared -fPIC -ldl -Wl,-rpath,$(RT_DIR) -o $@
+
+test_close: $(VORTEX_HOME)/tests/runtime/test_close.cpp libvortex-close_test.so
+	$(CXX) $(CXXFLAGS) $< $(LDFLAGS) -L. -lvortex-close_test -Wl,-rpath,'$$ORIGIN' -o $@
 
 # Bare run — honours whatever VORTEX_DRIVER is in the environment.
 run: $(TESTS)
@@ -67,4 +73,4 @@ run-xrt: $(TESTS)
 	done
 
 clean:
-	rm -f $(TESTS)
+	rm -f $(TESTS) libvortex-close_test.so

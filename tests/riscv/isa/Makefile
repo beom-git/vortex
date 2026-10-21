@@ -1,5 +1,8 @@
 include ../common.mk
 
+# ISA suites share simulator stamps, object directories, and published paths.
+.NOTPARALLEL:
+
 # Upstream RISC-V ISA tests (riscv-tests/isa). The upstream tree is cloned
 # and built by the $(RISCV_TESTS_STAMP) rule in ../common.mk; the run-*
 # targets below depend on it, so the first invocation auto-installs.
@@ -8,12 +11,13 @@ include ../common.mk
 # mtvec) lets the test's own trap_vector run, and the HTIF `tohost`
 # watcher in the simulators harvests pass/fail.
 
-# Skip atomic ISA tests when the build is configured without EXT_A_ENABLE.
-# Without atomics support, AMO instructions trap and the test fails. Resolve
-# the post-preprocessor value of EXT_A_ENABLED rather than grepping (the
-# header always lists both 0 and 1 branches inside an #ifdef block).
-HAS_EXT_A := $(shell echo 'VX_CFG_EXT_A_ENABLED' | gcc -E -P $(CONFIGS) -I$(ROOT_DIR)/sw -I$(ROOT_DIR)/hw -include VX_config.h - 2>/dev/null | tr -d ' \t\n')
-HAS_EXT_C := $(shell echo 'VX_CFG_EXT_C_ENABLED' | gcc -E -P $(CONFIGS) -I$(ROOT_DIR)/sw -I$(ROOT_DIR)/hw -include VX_config.h - 2>/dev/null | tr -d ' \t\n')
+# Generated headers also emit helper functions, so preprocessor output is not a scalar flag.
+ISA_CONFIGS := $(shell python3 $(ROOT_DIR)/ci/gen_config.py --config=$(VORTEX_HOME)/VX_config.toml --cflags='$(CONFIGS) -DVX_CFG_XLEN=$(XLEN)')
+ifneq ($(.SHELLSTATUS),0)
+$(error could not resolve ISA configuration)
+endif
+HAS_EXT_A := $(filter -DVX_CFG_EXT_A_ENABLED=1,$(ISA_CONFIGS))
+HAS_EXT_C := $(filter -DVX_CFG_EXT_C_ENABLED=1,$(ISA_CONFIGS))
 
 # Test-suite prefixes (extension-gated). A/C are only run when the build
 # was configured with the corresponding extension.
@@ -29,11 +33,11 @@ P_64F := rv64uf-p
 P_64D := rv64ud-p
 P_64A :=
 P_64C :=
-ifneq ($(HAS_EXT_A),0)
+ifneq ($(HAS_EXT_A),)
 P_32A := rv32ua-p
 P_64A := rv64ua-p
 endif
-ifneq ($(HAS_EXT_C),0)
+ifneq ($(HAS_EXT_C),)
 P_32C := rv32uc-p
 P_64C := rv64uc-p
 endif
@@ -45,12 +49,16 @@ endif
 # coherence), ma_data (no misaligned-access trap), rv64uc-p-rvc
 # (misaligned C.FLD the upstream test expects to trap on).
 define run_isa
-@set -e; for pfx in $(2); do for t in $(ISA_DIR)/$$pfx-*; do \
+$(if $(strip $(2)),,$(error $@ requires an enabled ISA extension in CONFIGS))
+$(if $(filter rtlsim,$(1)),+@$(MAKE) -C $(SIM_DIR)/rtlsim)
+@set -e; for pfx in $(2); do found=0; for t in $(ISA_DIR)/$$pfx-*; do \
   case "$$t" in *.dump) continue;; esac; [ -f "$$t" ] || continue; \
+  found=1; \
   b=`basename $$t`; \
   case "$$b" in *-fence_i|*-ma_data|rv64uc-p-rvc) echo "[skip] $$b"; continue;; esac; \
   echo "[run]  $$b"; $(SIM_DIR)/$(1)/$(1) "$$t" || { echo "[FAIL] $$b"; exit 1; }; \
-done; done; echo "[$(1)] passed: $(2)"
+done; [ $$found -eq 1 ] || { echo "[FAIL] no ISA binaries for $$pfx" >&2; exit 1; }; \
+done; echo "[$(1)] passed: $(2)"
 endef
 
 all:
