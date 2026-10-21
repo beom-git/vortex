@@ -22,6 +22,12 @@ package VX_tcu_pkg;
 
     import VX_gpu_pkg::*;
 
+`ifdef SIMULATION
+`ifdef SV_DPI
+    import "DPI-C" function void dpi_trace(input int level, input string format /*verilator sformat*/);
+`endif
+`endif
+
     // WARNING: Changing this list requires updating format utility functions below
     // Supported floating-point types (prefer setting bfloat versions to odd)
     localparam TCU_FP32_ID  = 0;
