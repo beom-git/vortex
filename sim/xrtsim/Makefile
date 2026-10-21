@@ -1,5 +1,9 @@
 include ../common.mk
 
+ifneq ($(filter-out verilator,$(SIMULATOR)),)
+$(error xrtsim supports SIMULATOR=verilator only; VCS is supported by rtlsim)
+endif
+
 DESTDIR ?= $(CURDIR)
 
 CONFIG_FILE := $(DESTDIR)/xrtsim_config.stamp

@@ -20,6 +20,13 @@
 #include "util.h"
 #include <VX_config.h>
 #include <bitset>
+#include <cerrno>
+#include <cstring>
+#include <system_error>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 using namespace vortex;
 
@@ -441,22 +448,49 @@ RAM::RAM(uint64_t capacity, uint32_t page_size)
 }
 
 RAM::~RAM() {
-  this->clear();
+  release_pages();
+  if (shared_state_) {
+    munmap(shared_state_, 4096 + (uint64_t(1) << (VX_CFG_MEM_ADDR_WIDTH - page_bits_)));
+    close(shared_.data_fd);
+    close(shared_.state_fd);
+  }
   delete[] zero_page_;
 }
 
 void RAM::clear() {
+  if (shared_state_) {
+    throw std::logic_error("Cannot clear RAM while shared backing is attached");
+  }
+  release_pages();
+}
+
+void RAM::release_pages() {
   for (auto& entry : chunks_) {
     for (int i = 0; i < CHUNK_SIZE; ++i) {
-      delete[] entry.second[i];
+      if (shared_state_) {
+        if (entry.second[i]) munmap(entry.second[i], uint64_t(1) << page_bits_);
+      } else {
+        delete[] entry.second[i];
+      }
     }
     delete[] entry.second;
   }
   chunks_.clear();
   last_chunk_ = nullptr;
+  for (const auto& entry : state_pages_) {
+    if (shared_state_) {
+      munmap(entry.second, uint64_t(1) << page_bits_);
+    } else {
+      delete[] entry.second;
+    }
+  }
+  state_pages_.clear();
 }
 
 uint64_t RAM::size() const {
+  if (shared_state_) {
+    return __atomic_load_n(reinterpret_cast<uint64_t*>(shared_state_), __ATOMIC_ACQUIRE) << page_bits_;
+  }
   uint64_t allocated_pages = 0;
   for (const auto& entry : chunks_) {
     for (int i = 0; i < CHUNK_SIZE; ++i) {
@@ -475,6 +509,12 @@ uint8_t *RAM::get(uint64_t address, bool allocate) const {
   uint32_t page_size   = 1 << page_bits_;
   uint32_t page_offset = address & (page_size - 1);
   uint64_t page_index  = address >> page_bits_;
+  if (shared_state_) {
+    if ((address >> VX_CFG_MEM_ADDR_WIDTH) != 0) throw OutOfRange();
+    if (!allocate && !(__atomic_load_n(shared_state_ + 4096 + page_index, __ATOMIC_ACQUIRE) & 1)) {
+      return zero_page_ + page_offset;
+    }
+  }
 
   uint64_t chunk_index  = page_index >> CHUNK_BITS;
   uint32_t chunk_offset = page_index & (CHUNK_SIZE - 1);
@@ -487,7 +527,7 @@ uint8_t *RAM::get(uint64_t address, bool allocate) const {
     if (it != chunks_.end()) {
       chunk = it->second;
     } else {
-      if (!allocate)
+      if (!allocate && !shared_state_)
         return zero_page_ + page_offset;
       chunk = new uint8_t*[CHUNK_SIZE](); // zero-initialized chunk directory
       chunks_.emplace(chunk_index, chunk);
@@ -498,11 +538,15 @@ uint8_t *RAM::get(uint64_t address, bool allocate) const {
 
   uint8_t* page = chunk[chunk_offset];
   if (!page) {
-    if (!allocate)
+    if (!allocate && !shared_state_)
       return zero_page_ + page_offset;
-    page = new uint8_t[page_size];
-    for (uint32_t i = 0; i < page_size; ++i) {
-      page[i] = (0xbaadf00d >> ((i & 0x3) * 8)) & 0xff;
+    if (shared_state_) {
+      page = shared_page(page_index, allocate);
+    } else {
+      page = new uint8_t[page_size];
+      for (uint32_t i = 0; i < page_size; ++i) {
+        page[i] = (0xbaadf00d >> ((i & 0x3) * 8)) & 0xff;
+      }
     }
     chunk[chunk_offset] = page;
   }
@@ -510,23 +554,165 @@ uint8_t *RAM::get(uint64_t address, bool allocate) const {
   return page + page_offset;
 }
 
+uint8_t* RAM::get_known(uint64_t address, bool allocate) const {
+  auto data = get(address, allocate);
+  auto state = get_state(address, false);
+  if (state && *state) {
+    throw std::runtime_error("RAM byte reference contains X/Z at address " + std::to_string(address));
+  }
+  return data;
+}
+
+uint8_t* RAM::get_state(uint64_t address, bool allocate) const {
+  uint64_t page_index = address >> page_bits_;
+  uint32_t page_size = uint32_t(1) << page_bits_;
+  if (shared_state_ && !allocate &&
+      !(__atomic_load_n(shared_state_ + 4096 + page_index, __ATOMIC_ACQUIRE) & 2)) {
+    return nullptr;
+  }
+  auto it = state_pages_.find(page_index);
+  if (it == state_pages_.end()) {
+    uint8_t* page;
+    if (shared_state_) {
+      // The second sparse plane uses the same descriptor in both processes.
+      auto offset = (uint64_t(1) << VX_CFG_MEM_ADDR_WIDTH) + (page_index << page_bits_);
+      void* mapping = mmap(nullptr, page_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                           shared_.data_fd, offset);
+      if (mapping == MAP_FAILED) {
+        throw std::system_error(errno, std::generic_category(), "map RAM logic state");
+      }
+      page = static_cast<uint8_t*>(mapping);
+      if (allocate) {
+        __atomic_fetch_or(shared_state_ + 4096 + page_index, uint8_t(2), __ATOMIC_RELEASE);
+      }
+    } else {
+      if (!allocate) {
+        return nullptr;
+      }
+      page = new uint8_t[page_size]();
+    }
+    it = state_pages_.emplace(page_index, page).first;
+  }
+  return it->second + (address & (page_size - 1));
+}
+
+RAM::SharedMemory RAM::share() {
+  if (shared_state_) return shared_;
+  if (!chunks_.empty()) throw std::logic_error("Share RAM before allocating pages");
+  int data_fd = syscall(SYS_memfd_create, "vortex-data", 1);
+  if (data_fd < 0) throw std::system_error(errno, std::generic_category(), "memfd_create data");
+  int state_fd = syscall(SYS_memfd_create, "vortex-pages", 1);
+  try {
+    if (state_fd < 0) throw std::system_error(errno, std::generic_category(), "memfd_create pages");
+    if (ftruncate(data_fd, uint64_t(2) << VX_CFG_MEM_ADDR_WIDTH) ||
+        ftruncate(state_fd, 4096 + (uint64_t(1) << (VX_CFG_MEM_ADDR_WIDTH - page_bits_)))) {
+      throw std::system_error(errno, std::generic_category(), "ftruncate shared RAM");
+    }
+    attach_shared({data_fd, state_fd, uint32_t(1) << page_bits_});
+  } catch (...) {
+    close(data_fd);
+    if (state_fd >= 0) close(state_fd);
+    throw;
+  }
+  close(data_fd);
+  close(state_fd);
+  return shared_;
+}
+
+void RAM::attach_shared(const SharedMemory& memory) {
+  if (shared_state_ || !chunks_.empty() || memory.page_size != (uint32_t(1) << page_bits_) ||
+      memory.page_size < uint32_t(sysconf(_SC_PAGESIZE))) {
+    throw std::invalid_argument("Shared RAM requires empty memory and matching host-aligned pages");
+  }
+  int data_fd = fcntl(memory.data_fd, F_DUPFD_CLOEXEC, 0);
+  // Independent open descriptions make page locks exclude both threads and processes.
+  std::string state_path = "/proc/self/fd/" + std::to_string(memory.state_fd);
+  int state_fd = open(state_path.c_str(), O_RDWR | O_CLOEXEC);
+  void* mapping = MAP_FAILED;
+  if (data_fd >= 0 && state_fd >= 0) {
+    mapping = mmap(nullptr, 4096 + (uint64_t(1) << (VX_CFG_MEM_ADDR_WIDTH - page_bits_)),
+                   PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NORESERVE, state_fd, 0);
+  }
+  if (mapping == MAP_FAILED) {
+    int error = errno;
+    if (data_fd >= 0) close(data_fd);
+    if (state_fd >= 0) close(state_fd);
+    throw std::system_error(error, std::generic_category(), "map shared RAM");
+  }
+  shared_ = {data_fd, state_fd, memory.page_size};
+  shared_state_ = static_cast<uint8_t*>(mapping);
+}
+
+uint8_t* RAM::shared_page(uint64_t page_index, bool allocate) const {
+  uint64_t page_size = uint64_t(1) << page_bits_;
+  void* mapping = mmap(nullptr, page_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                       shared_.data_fd, page_index << page_bits_);
+  if (mapping == MAP_FAILED) throw std::system_error(errno, std::generic_category(), "map RAM page");
+  uint8_t* state = shared_state_ + 4096 + page_index;
+  if (allocate && !(__atomic_load_n(state, __ATOMIC_ACQUIRE) & 1)) {
+    // OFD locks survive unrelated duplicate closes and release with their last descriptor.
+    struct flock lock{};
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start = 4096 + page_index;
+    lock.l_len = 1;
+    int result;
+    do { result = fcntl(shared_.state_fd, F_OFD_SETLKW, &lock); } while (result < 0 && errno == EINTR);
+    if (result < 0) {
+      int error = errno;
+      munmap(mapping, page_size);
+      throw std::system_error(error, std::generic_category(), "lock RAM page");
+    }
+    if (!(__atomic_load_n(state, __ATOMIC_ACQUIRE) & 1)) {
+      std::memcpy(mapping, zero_page_, page_size);
+      __atomic_add_fetch(reinterpret_cast<uint64_t*>(shared_state_), 1, __ATOMIC_RELEASE);
+      __atomic_fetch_or(state, uint8_t(1), __ATOMIC_RELEASE);
+    }
+    lock.l_type = F_UNLCK;
+    fcntl(shared_.state_fd, F_OFD_SETLK, &lock);
+  }
+  return static_cast<uint8_t*>(mapping);
+}
+
 void RAM::read(void* data, uint64_t addr, uint64_t size) {
+  read_logic(data, nullptr, addr, size);
+}
+
+void RAM::read_logic(void* data, void* state, uint64_t addr, uint64_t size) {
   if (check_acl_ && acl_mngr_.check(addr, size, 0x1) == false) {
     throw BadAddress();
   }
   uint8_t* d = (uint8_t*)data;
+  uint8_t* s = static_cast<uint8_t*>(state);
   for (uint64_t i = 0; i < size; i++) {
     d[i] = *this->get(addr + i, false); // read-only — no allocation
+    auto stored_state = get_state(addr + i, false);
+    uint8_t value = stored_state ? *stored_state : 0;
+    if (s) {
+      s[i] = value;
+    } else if (value) {
+      throw std::runtime_error("RAM read contains X/Z at address " + std::to_string(addr + i));
+    }
   }
 }
 
 void RAM::write(const void* data, uint64_t addr, uint64_t size) {
+  write_logic(data, nullptr, addr, size);
+}
+
+void RAM::write_logic(const void* data, const void* state, uint64_t addr, uint64_t size) {
   if (check_acl_ && acl_mngr_.check(addr, size, 0x2) == false) {
     throw BadAddress();
   }
   const uint8_t* d = (const uint8_t*)data;
+  const uint8_t* s = static_cast<const uint8_t*>(state);
   for (uint64_t i = 0; i < size; i++) {
     *this->get(addr + i, true) = d[i];
+    uint8_t value = s ? s[i] : 0;
+    auto stored_state = get_state(addr + i, value != 0);
+    if (stored_state) {
+      *stored_state = value;
+    }
   }
 }
 
@@ -537,13 +723,23 @@ void RAM::copy(uint64_t dest_addr, uint64_t src_addr, uint64_t size) {
       throw BadAddress();
     }
   }
+  auto copy_byte = [&](uint64_t dest, uint64_t src) {
+    uint8_t data = *get(src, false);
+    auto state = get_state(src, false);
+    uint8_t value = state ? *state : 0;
+    *get(dest, true) = data;
+    auto dest_state = get_state(dest, value != 0);
+    if (dest_state) {
+      *dest_state = value;
+    }
+  };
   if (dest_addr > src_addr) {
     for (uint64_t i = size; i > 0; i--) {
-      *this->get(dest_addr + i - 1, true) = *this->get(src_addr + i - 1, false);
+      copy_byte(dest_addr + i - 1, src_addr + i - 1);
     }
   } else if (dest_addr < src_addr) {
     for (uint64_t i = 0; i < size; i++) {
-      *this->get(dest_addr + i, true) = *this->get(src_addr + i, false);
+      copy_byte(dest_addr + i, src_addr + i);
     }
   }
 }

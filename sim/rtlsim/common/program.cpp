@@ -23,7 +23,8 @@
 #include <VX_config.h>
 #include <VX_types.h>
 #include <vector>
-#include "processor.h"
+#include <rtlsim.h>
+#include "program.h"
 
 #define RAM_PAGE_SIZE 4096
 
@@ -57,16 +58,17 @@ static void parse_args(int argc, char **argv) {
 	}
 }
 
-int main(int argc, char **argv) {
+int vortex::run_program(int argc, char **argv) {
 	int exitcode = 0;
 
 	parse_args(argc, argv);
 
 	// create memory module
-	vortex::RAM ram(0, RAM_PAGE_SIZE);
+	// Keep standalone state alive until process exit; some model scopes cannot be destroyed safely.
+	vortex::RAM& ram = *new vortex::RAM(0, RAM_PAGE_SIZE);
 
 	// create processor
-	vortex::Processor processor;
+	vortex::Processor& processor = *new vortex::Processor();
 
 	// attach memory module
 	processor.attach_ram(&ram);
@@ -148,7 +150,6 @@ int main(int argc, char **argv) {
 		ram.read(&exitcode, VX_MEM_IO_EXIT_CODE, 4);
 	}
 
-	// Use _exit() to bypass destructors — the simulator runtime's scope cleanup
-	// crashes on strcmp with certain 64-bit module hierarchies; OS reclaims resources.
-	_exit(exitcode);
+	processor.finish();
+	return exitcode;
 }

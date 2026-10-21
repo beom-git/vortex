@@ -28,6 +28,7 @@ public:
   ~Processor();
 
   void attach_ram(RAM* ram);
+  void finish();
 
   // When `monitor` is non-null and enabled, the run loop polls it each
   // cycle and stops as soon as the HTIF `tohost` word is written. When

@@ -28,7 +28,7 @@
 
 #include <mem.h>
 #include <util.h>
-#include <processor.h>
+#include <rtlsim.h>
 #include <cmd_processor.h>
 
 #include <stdint.h>
@@ -53,12 +53,25 @@ public:
   }
 
   ~vx_device() {
-    if (future_.valid()) {
-      future_.wait();
-    }
+    close();
     for (auto& kv : host_regions_)
       free(reinterpret_cast<void*>(kv.first));
     host_regions_.clear();
+  }
+
+  int close() {
+    int status = 0;
+    try { if (future_.valid()) future_.get(); }
+    catch (const std::exception& error) {
+      fprintf(stderr, "rtlsim: %s\n", error.what());
+      status = -1;
+    }
+    try { processor_.finish(); }
+    catch (const std::exception& error) {
+      fprintf(stderr, "rtlsim: %s\n", error.what());
+      status = -1;
+    }
+    return status;
   }
 
   int init() {
@@ -73,14 +86,28 @@ public:
   // each MMIO transaction keeps the CP responsive without a dedicated
   // simulation thread.
   int cp_reg_write(uint32_t off, uint32_t value) {
-    cp_.mmio_write(off, value);
-    for (int i = 0; i < 256 && cp_.busy(); ++i) cp_.tick();
-    return 0;
+    if (failed_) return -1;
+    try {
+      cp_.mmio_write(off, value);
+      for (int i = 0; i < 256 && cp_.busy(); ++i) cp_.tick();
+      return 0;
+    } catch (const std::exception& error) {
+      failed_ = true;
+      fprintf(stderr, "rtlsim: %s\n", error.what());
+      return -1;
+    }
   }
   int cp_reg_read(uint32_t off, uint32_t* value) {
-    for (int i = 0; i < 256 && cp_.busy(); ++i) cp_.tick();
-    *value = cp_.mmio_read(off);
-    return 0;
+    if (failed_) return -1;
+    try {
+      for (int i = 0; i < 256 && cp_.busy(); ++i) cp_.tick();
+      *value = cp_.mmio_read(off);
+      return 0;
+    } catch (const std::exception& error) {
+      failed_ = true;
+      fprintf(stderr, "rtlsim: %s\n", error.what());
+      return -1;
+    }
   }
 
   // ----- CP-visible host memory (command ring + DMA staging) -----
@@ -157,8 +184,8 @@ private:
     };
     h.vortex_dcr_read = [this](uint32_t addr, uint32_t tag) -> uint32_t {
       // Wait for any background processor_.run() to finish so dcr_read
-      // does not race the Verilator state.
-      if (future_.valid()) future_.wait();
+      // does not race the simulator state.
+      if (future_.valid()) future_.get();
       uint32_t v = 0;
       processor_.dcr_read(addr, tag, &v);
       return v;
@@ -168,7 +195,9 @@ private:
     };
     h.vortex_busy = [this]() -> bool {
       if (!future_.valid()) return false;
-      return future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
+      if (future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return true;
+      future_.get();
+      return false;
     };
 #ifdef VX_CFG_VM_ENABLE
     // The device MMU control surface answers the fault-report DCRs.
@@ -180,9 +209,26 @@ private:
   RAM                 ram_;
   Processor           processor_;
   std::future<void>   future_;
+  bool failed_ = false;
   vortex::CommandProcessor cp_;
   std::mutex          host_mu_;
   std::map<uint64_t, uint64_t> host_regions_;   // base -> size
 };
 
+// Check worker shutdown before destroying the backend context.
+#define vx_dev_init rtlsim_init_callbacks
 #include <callbacks.inc>
+#undef vx_dev_init
+
+extern "C" int vx_dev_init(callbacks_t* callbacks) {
+  int status = rtlsim_init_callbacks(callbacks);
+  if (status) return status;
+  callbacks->dev_close = [](void* context) -> int {
+    if (!context) return -1;
+    auto device = static_cast<vx_device*>(context);
+    int result = device->close();
+    delete device;
+    return result;
+  };
+  return 0;
+}

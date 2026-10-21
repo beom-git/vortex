@@ -148,30 +148,53 @@ Device::Device(std::unique_ptr<Platform> plat)
 }
 
 Device::~Device() {
-    // Release whatever default-queue / last-event the legacy wrapper holds.
-    if (legacy_last_)   { legacy_last_->release();   legacy_last_   = nullptr; }
-    if (legacy_q_)      { legacy_q_->release();      legacy_q_      = nullptr; }
-    // Drain the kernel-args scratch pool.
-    {
-        std::lock_guard<std::mutex> g(args_pool_mu_);
-        for (uint64_t addr : args_pool_free_)
-            this->mem_free(addr);
-        args_pool_free_.clear();
+    close_();
+}
+
+bool Device::release(vx_result_t* result) {
+    if (result) *result = VX_SUCCESS;
+    if (!release_ref()) return false;
+    vx_result_t status = close_();
+    delete this;
+    if (result) *result = status;
+    else if (status != VX_SUCCESS) std::fprintf(stderr, "vortex: device shutdown failed (%d)\n", status);
+    return true;
+}
+
+vx_result_t Device::close_() noexcept {
+    if (closed_) return close_result_;
+    closed_ = true;
+    try {
+        // Release whatever default-queue / last-event the legacy wrapper holds.
+        if (legacy_last_)   { legacy_last_->release();   legacy_last_   = nullptr; }
+        if (legacy_q_)      { legacy_q_->release();      legacy_q_      = nullptr; }
+        // Drain the kernel-args scratch pool.
+        {
+            std::lock_guard<std::mutex> g(args_pool_mu_);
+            for (uint64_t addr : args_pool_free_)
+                this->mem_free(addr);
+            args_pool_free_.clear();
+        }
+        // Park the CP before releasing the buffers it masters into. Ordering is
+        // load-bearing: the fetch is still enabled and still pointed at the ring,
+        // and on a backend that stages CP memory in device memory the free below
+        // hands those bytes straight back to the allocator.
+        cp_quiesce_();
+        // Release the CP ring / head / completion host buffers.
+        if (cp_ring_.cp_addr) host_free(cp_ring_.cp_addr);
+        if (cp_head_.cp_addr) host_free(cp_head_.cp_addr);
+        if (cp_cmpl_.cp_addr) host_free(cp_cmpl_.cp_addr);
+        // Queues / buffers are torn down by their own refcount path; this
+        // just detaches the device backlinks.
+        std::lock_guard<std::mutex> g(mu_);
+        queues_.clear();
+        buffers_.clear();
+    } catch (...) {
+        close_result_ = VX_ERR_INTERNAL;
     }
-    // Park the CP before releasing the buffers it masters into. Ordering is
-    // load-bearing: the fetch is still enabled and still pointed at the ring,
-    // and on a backend that stages CP memory in device memory the free below
-    // hands those bytes straight back to the allocator.
-    cp_quiesce_();
-    // Release the CP ring / head / completion host buffers.
-    if (cp_ring_.cp_addr) host_free(cp_ring_.cp_addr);
-    if (cp_head_.cp_addr) host_free(cp_head_.cp_addr);
-    if (cp_cmpl_.cp_addr) host_free(cp_cmpl_.cp_addr);
-    // Queues / buffers are torn down by their own refcount path; this
-    // just detaches the device backlinks.
-    std::lock_guard<std::mutex> g(mu_);
-    queues_.clear();
-    buffers_.clear();
+    auto status = platform_->close();
+    if (close_result_ == VX_SUCCESS) close_result_ = status;
+    return close_result_;
 }
 
 // ============================================================================
@@ -1313,11 +1336,15 @@ void Device::unregister_buffer(Buffer* b) {
     buffers_.erase(b);
 }
 
-Queue* Device::legacy_default_queue() {
+Queue* Device::legacy_acquire_default_queue() {
     // Fast path: already created.
     {
         std::lock_guard<std::mutex> g(mu_);
-        if (legacy_q_) return legacy_q_;
+        if (legacy_closed_) return nullptr;
+        if (legacy_q_) {
+            legacy_q_->retain();
+            return legacy_q_;
+        }
     }
     // Slow path: create OUTSIDE the lock. Queue::create takes this same
     // mutex via register_queue, so holding it here would block.
@@ -1327,16 +1354,26 @@ Queue* Device::legacy_default_queue() {
     info.flags       = 0;
     Queue* q = nullptr;
     if (Queue::create(this, &info, &q) != VX_SUCCESS) return nullptr;
-    // Publish (and handle race where two threads created queues
-    // concurrently — keep one, release the other).
+    Queue* selected;
     {
         std::lock_guard<std::mutex> g(mu_);
-        if (legacy_q_) {
-            q->release();
-            return legacy_q_;
+        if (legacy_closed_) {
+            selected = nullptr;
+        } else {
+            if (!legacy_q_) legacy_q_ = q;
+            selected = legacy_q_;
+            selected->retain();
         }
-        legacy_q_ = q;
     }
+    if (selected != q) q->release();
+    return selected;
+}
+
+Queue* Device::legacy_take_default_queue() {
+    std::lock_guard<std::mutex> g(mu_);
+    legacy_closed_ = true;
+    Queue* q = legacy_q_;
+    legacy_q_ = nullptr;
     return q;
 }
 
@@ -1387,11 +1424,9 @@ extern "C" vx_result_t vx_device_retain(vx_device_h dev) {
 extern "C" vx_result_t vx_device_release(vx_device_h dev) {
     VX_C_ENTRY_TRY
     if (!dev) return VX_ERR_INVALID_HANDLE;
-    // ~Device tears down queues/buffers/modules; any of their dtors going
-    // off-rails (e.g. an XRT bo cleanup throwing on a dead device) must not
-    // propagate across the C boundary.
-    to_device(dev)->release();
-    return VX_SUCCESS;
+    vx_result_t status = VX_SUCCESS;
+    to_device(dev)->release(&status);
+    return status;
     VX_C_ENTRY_CATCH
 }
 

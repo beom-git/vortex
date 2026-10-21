@@ -43,6 +43,7 @@ typedef struct {
   // The dispatcher wraps it in a vx::Device. All one-time platform setup
   // (device handle, CP-reachable device-memory aperture) happens here.
   int (*dev_open)  (void** out_dev_ctx);
+  // dev_close consumes the context even on failure; callers must not retry it.
   int (*dev_close) (void*  dev_ctx);
 
   // ----- CP register channel -----

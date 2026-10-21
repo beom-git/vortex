@@ -28,10 +28,12 @@ inline int to_int(vx_result_t r) {
 // synchronously and release the event.
 template <typename Fn>
 vx_result_t enqueue_and_wait(Device* dev, Fn&& fn) {
-    Queue* q = dev->legacy_default_queue();
-    if (!q) return VX_ERR_OUT_OF_HOST_MEMORY;
+    auto release_queue = [](Queue* q) { q->release(); };
+    std::unique_ptr<Queue, decltype(release_queue)> q(
+        dev->legacy_acquire_default_queue(), release_queue);
+    if (!q) return VX_ERR_INVALID_HANDLE;
     vx_event_h ev = nullptr;
-    auto r = fn(to_handle(q), &ev);
+    auto r = fn(to_handle(q.get()), &ev);
     if (r != VX_SUCCESS) return r;
     if (ev) {
         r = vx_event_wait_value(ev, 1, VX_TIMEOUT_INFINITE);
@@ -60,6 +62,8 @@ extern "C" int vx_dev_close(vx_device_h hdevice) {
         last->wait(VX_TIMEOUT_INFINITE);
         last->release();
     }
+    // The default queue retains the device; detach it before the final release.
+    if (Queue* queue = dev->legacy_take_default_queue()) queue->release();
     return to_int(vx_device_release(hdevice));
 }
 
@@ -186,7 +190,9 @@ extern "C" int vx_start(vx_device_h hdevice, vx_buffer_h hkernel,
     uint32_t full_block[3] = {eff_block_dim[0], 1, 1};
     uint32_t lmem_size     = 0;
 
-    Queue* q = dev->legacy_default_queue();
+    auto release_queue = [](Queue* q) { q->release(); };
+    std::unique_ptr<Queue, decltype(release_queue)> q(
+        dev->legacy_acquire_default_queue(), release_queue);
     if (!q) return -1;
 
     // DCR writes are fire-and-forget (queue is a strict FIFO); the launch
@@ -214,7 +220,7 @@ extern "C" int vx_start(vx_device_h hdevice, vx_buffer_h hkernel,
         { VX_DCR_KMU_CLUSTER_DIM_Z, 1 },
     };
     for (auto& w : kmu_writes) {
-        auto r = vx_enqueue_dcr_write(to_handle(q), w.addr, w.value,
+        auto r = vx_enqueue_dcr_write(to_handle(q.get()), w.addr, w.value,
                                       0, nullptr, /*out_event=*/nullptr);
         if (r != VX_SUCCESS) return -1;
     }
@@ -227,7 +233,7 @@ extern "C" int vx_start(vx_device_h hdevice, vx_buffer_h hkernel,
     li.args_size   = 0;
     li.ndim        = 0;
     vx_event_h ev = nullptr;
-    auto r = vx_enqueue_launch(to_handle(q), &li, 0, nullptr, &ev);
+    auto r = vx_enqueue_launch(to_handle(q.get()), &li, 0, nullptr, &ev);
     if (r != VX_SUCCESS) return -1;
     dev->legacy_remember_last_event(to_event(ev));
     return 0;

@@ -285,6 +285,16 @@ private:
 class RAM : public MemDevice {
 public:
 
+  struct SharedMemory {
+    int data_fd;
+    int state_fd;
+    uint32_t page_size;
+  };
+
+  // Descriptors remain owned by RAM; sharing must precede page allocation.
+  SharedMemory share();
+  void attach_shared(const SharedMemory& memory);
+
   RAM(uint64_t capacity, uint32_t page_size);
   RAM(uint64_t capacity) : RAM(capacity, capacity) {}
   ~RAM();
@@ -297,16 +307,21 @@ public:
   void write(const void* data, uint64_t addr, uint64_t size) override;
   void copy (uint64_t dest_addr, uint64_t src_addr, uint64_t size);
 
+  // DPI aval/bval bytes retain X/Z; ordinary reads require known data.
+  void read_logic(void* data, void* state, uint64_t addr, uint64_t size);
+  void write_logic(const void* data, const void* state, uint64_t addr, uint64_t size);
+
   void loadBinImage(const char* filename, uint64_t destination);
   void loadHexImage(const char* filename);
   void loadVxImage(const char* filename);
 
+  // Byte references require known data; write() can replace an unknown byte.
   uint8_t& operator[](uint64_t address) {
-    return *this->get(address, true);
+    return *this->get_known(address, true);
   }
 
   const uint8_t& operator[](uint64_t address) const {
-    return *this->get(address, false); // returns zero_page_ for unallocated addresses
+    return *this->get_known(address, false); // returns zero_page_ for unallocated addresses
   }
 
   void set_acl(uint64_t addr, uint64_t size, int flags);
@@ -322,6 +337,10 @@ private:
   // allocator churn on never-written memory. `allocate=true` mints a real
   // page on demand for write paths.
   uint8_t *get(uint64_t address, bool allocate) const;
+  uint8_t* get_known(uint64_t address, bool allocate) const;
+  uint8_t* get_state(uint64_t address, bool allocate) const;
+  uint8_t* shared_page(uint64_t page_index, bool allocate) const;
+  void release_pages();
 
   uint64_t capacity_;
   uint32_t page_bits_;
@@ -335,6 +354,7 @@ private:
   mutable std::unordered_map<uint64_t, uint8_t**> chunks_;
   mutable uint8_t** last_chunk_;
   mutable uint64_t last_chunk_index_;
+  mutable std::unordered_map<uint64_t, uint8_t*> state_pages_;
 
   // Shared "0xbaadf00d" sentinel page returned for read-without-allocate.
   // Mutable access through operator[] or `get(addr, true)` will mint a real
@@ -343,6 +363,8 @@ private:
 
   ACLManager acl_mngr_;
   bool check_acl_;
+  SharedMemory shared_{-1, -1, 0};
+  uint8_t* shared_state_ = nullptr;
 };
 
 } // namespace vortex

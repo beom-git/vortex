@@ -83,7 +83,7 @@ public:
     void retain() { refs_.fetch_add(1, std::memory_order_relaxed); }
 
     bool release() {
-        if (refs_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        if (release_ref()) {
             delete static_cast<T*>(this);
             return true;
         }
@@ -93,6 +93,7 @@ public:
     uint32_t refs() const { return refs_.load(std::memory_order_relaxed); }
 
 protected:
+    bool release_ref() { return refs_.fetch_sub(1, std::memory_order_acq_rel) == 1; }
     ~RefCounted() = default;
 
 private:
@@ -119,6 +120,7 @@ private:
 class Platform {
 public:
     virtual ~Platform() = default;
+    virtual vx_result_t close() noexcept { return VX_SUCCESS; }
 
     // ----- CP register channel (sole control path) -----
     // `off` is the CP-internal regfile offset (matching VX_cp_axil_regfile).
@@ -150,8 +152,7 @@ public:
 //
 // Each Device owns one CallbacksAdapter holding the loaded backend's
 // callbacks_t table and the backend's opaque device context pointer.
-// All Platform virtual calls forward through the table; cb_.dev_close
-// fires automatically when the adapter is destroyed.
+// Checked close consumes the backend context; destruction closes it if needed.
 // ============================================================================
 
 class CallbacksAdapter final : public Platform {
@@ -160,7 +161,20 @@ public:
         : cb_(cb), dev_ctx_(dev_ctx) {}
 
     ~CallbacksAdapter() override {
-        if (cb_.dev_close && dev_ctx_) cb_.dev_close(dev_ctx_);
+        close();
+    }
+
+    vx_result_t close() noexcept override {
+        if (dev_ctx_) {
+            void* context = dev_ctx_;
+            dev_ctx_ = nullptr;
+            try {
+                if (cb_.dev_close && cb_.dev_close(context)) close_result_ = VX_ERR_DEVICE_LOST;
+            } catch (...) {
+                close_result_ = VX_ERR_DEVICE_LOST;
+            }
+        }
+        return close_result_;
     }
 
     static vx_result_t r(int rc) {
@@ -194,6 +208,7 @@ public:
 private:
     callbacks_t cb_;
     void*       dev_ctx_;
+    vx_result_t close_result_ = VX_SUCCESS;
 };
 
 // ============================================================================
@@ -203,13 +218,15 @@ private:
 class Device : public RefCounted<Device> {
 public:
     static vx_result_t open(uint32_t index, Device** out);
+    bool release(vx_result_t* result = nullptr);
 
     Platform* platform()                     { return platform_.get(); }
     uint64_t  cycle_freq_hz()           const{ return cycle_freq_hz_; }
 
     // Legacy-wrapper helpers. The default queue is created lazily on the
     // first legacy call that needs one and destroyed at Device destruction.
-    Queue*    legacy_default_queue();
+    Queue*    legacy_acquire_default_queue();
+    Queue*    legacy_take_default_queue();
     Event*    legacy_take_last_event();
     void      legacy_remember_last_event(Event* ev);
 
@@ -356,6 +373,7 @@ private:
     friend class RefCounted<Device>;
     explicit Device(std::unique_ptr<Platform> plat);
     ~Device();
+    vx_result_t close_() noexcept;
 
     // Allocate ring/head/cmpl buffers and program the CP regfile.
     // Called from Device::open() after the platform is ready.
@@ -411,6 +429,8 @@ private:
     void        host_free (uint64_t cp_addr);
 
     std::unique_ptr<Platform>      platform_;
+    bool                          closed_ = false;
+    vx_result_t                   close_result_ = VX_SUCCESS;
     uint64_t                       cycle_freq_hz_;
 
     // Device-memory allocator (the CP DMAs to these addresses). Pure
@@ -446,6 +466,7 @@ private:
 
     Queue*                         legacy_q_     = nullptr;
     Event*                         legacy_last_  = nullptr;
+    bool                           legacy_closed_ = false;
 
     // CP state — populated only when cp_enabled_ == true. The ring / head /
     // completion buffers are CP-visible host memory (HostMem): the runtime
