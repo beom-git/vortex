@@ -109,7 +109,7 @@ void __init_tls(void) {
          VX_ABS_LINKER_SYM(__tbss_size));
 }
 
-#ifdef HAVE_INITFINI_ARRAY
+#ifdef _HAVE_INITFINI_ARRAY
 
 // These magic symbols are provided by the linker.
 extern void (*__preinit_array_start []) (void) __attribute__((weak));
@@ -140,7 +140,7 @@ void __libc_init_array (void) {
 }
 #endif
 
-#ifdef HAVE_INITFINI_ARRAY
+#ifdef _HAVE_INITFINI_ARRAY
 extern void (*__fini_array_start []) (void) __attribute__((weak));
 extern void (*__fini_array_end []) (void) __attribute__((weak));
 
@@ -166,7 +166,7 @@ void __libc_fini_array (void) {
 // Called by LIBC at program exit. Only statically-linked programs are
 // supported, so atexit() registration is not implemented.
 void __funcs_on_exit (void) {
-#ifdef HAVE_INITFINI_ARRAY
+#ifdef _HAVE_INITFINI_ARRAY
   __libc_fini_array();
 #endif
 }
