@@ -238,12 +238,17 @@ make -C sim/rtlsim SIMULATOR=vcs
 
 Load the VCS environment before selecting VCS so that `vcs` is on `PATH`.
 VCS requires Linux and a runtime license. `THREADS` defaults to 4.
+VCS exits with a nonzero status on assertion failure. `opaesim` and `xrtsim`
+support Verilator only.
 
 Select the engine for host runtime tests through the same variable:
 
 ```bash
 SIMULATOR=vcs ./ci/blackbox.sh --driver=rtlsim --app=basic --args="-n16"
 ```
+
+The VCS host library uses a child process and shared RAM. Custom `HostMonitor`
+and `CoutDrainer` callbacks are supported only by the standalone executable.
 
 Run the shared protocol and runtime checks with:
 
@@ -253,6 +258,10 @@ make -C tests/rtlsim run SIMULATOR=vcs
 make -C tests/rtlsim check-shared-ram
 make -C tests/rtlsim check-vcs-runtime SIMULATOR=vcs
 ```
+
+VCS preserves X/Z in memory payloads and rejects host reads of unknown data.
+Addresses, tags, byte enables, and controls must be known. Verilator remains
+two-state.
 
 For VCS FSDB output, load compatible VCS and Verdi environments so that
 `VERDI_HOME` points to the Verdi installation:
