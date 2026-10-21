@@ -17,38 +17,37 @@
 #include <rvfloats.h>
 #include <util.h>
 #include "svdpi.h"
-#include "verilated_vpi.h"
 
 using namespace vortex;
 
 extern "C" {
-  void dpi_fadd(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fsub(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fmul(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fnmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fnmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fadd(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fsub(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fmul(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fmadd(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fmsub(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fnmadd(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fnmsub(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
 
-  void dpi_fdiv(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_fsqrt(bool enable, int dst_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fdiv(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_fsqrt(svBit enable, int dst_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
 
-  void dpi_ftoi(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_ftou(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_itof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_utof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
-  void dpi_f2f(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_ftoi(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_ftou(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_itof(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_utof(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
+  void dpi_f2f(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags);
 
-  void dpi_fclss(bool enable, int dst_fmt, int64_t a, int64_t* result);
-  void dpi_fsgnj(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
-  void dpi_fsgnjn(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
-  void dpi_fsgnjx(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
+  void dpi_fclss(svBit enable, int dst_fmt, int64_t a, int64_t* result);
+  void dpi_fsgnj(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
+  void dpi_fsgnjn(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
+  void dpi_fsgnjx(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result);
 
-  void dpi_flt(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
-  void dpi_fle(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
-  void dpi_feq(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
-  void dpi_fmin(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
-  void dpi_fmax(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
+  void dpi_flt(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
+  void dpi_fle(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
+  void dpi_feq(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
+  void dpi_fmin(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
+  void dpi_fmax(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags);
 }
 
 inline uint64_t nan_box(uint32_t value) {
@@ -162,7 +161,7 @@ inline int64_t check_boxing4(int64_t a, uint8_t nan_value) {
 }
 
 
-void dpi_fadd(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fadd(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -172,7 +171,7 @@ void dpi_fadd(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal*
   }
 }
 
-void dpi_fsub(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fsub(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -182,7 +181,7 @@ void dpi_fsub(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal*
   }
 }
 
-void dpi_fmul(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fmul(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -192,7 +191,7 @@ void dpi_fmul(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal*
   }
 }
 
-void dpi_fmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fmadd(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -202,7 +201,7 @@ void dpi_fmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const 
   }
 }
 
-void dpi_fmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fmsub(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -212,7 +211,7 @@ void dpi_fmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const 
   }
 }
 
-void dpi_fnmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fnmadd(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -222,7 +221,7 @@ void dpi_fnmadd(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const
   }
 }
 
-void dpi_fnmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fnmsub(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -232,7 +231,7 @@ void dpi_fnmsub(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t c, const
   }
 }
 
-void dpi_fdiv(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fdiv(svBit enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -242,7 +241,7 @@ void dpi_fdiv(bool enable, int dst_fmt, int64_t a, int64_t b, const svBitVecVal*
   }
 }
 
-void dpi_fsqrt(bool enable, int dst_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_fsqrt(svBit enable, int dst_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -252,7 +251,7 @@ void dpi_fsqrt(bool enable, int dst_fmt, int64_t a, const svBitVecVal* frm, int6
   }
 }
 
-void dpi_ftoi(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_ftoi(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -270,7 +269,7 @@ void dpi_ftoi(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVa
   }
 }
 
-void dpi_ftou(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_ftou(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -288,7 +287,7 @@ void dpi_ftou(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVa
   }
 }
 
-void dpi_itof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_itof(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -306,7 +305,7 @@ void dpi_itof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVa
   }
 }
 
-void dpi_utof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_utof(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -324,7 +323,7 @@ void dpi_utof(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVa
   }
 }
 
-void dpi_f2f(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
+void dpi_f2f(svBit enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal* frm, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   switch (dst_fmt) {
@@ -414,7 +413,7 @@ void dpi_f2f(bool enable, int dst_fmt, int src_fmt, int64_t a, const svBitVecVal
   }
 }
 
-void dpi_fclss(bool enable, int dst_fmt, int64_t a, int64_t* result) {
+void dpi_fclss(svBit enable, int dst_fmt, int64_t a, int64_t* result) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -424,7 +423,7 @@ void dpi_fclss(bool enable, int dst_fmt, int64_t a, int64_t* result) {
   }
 }
 
-void dpi_fsgnj(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
+void dpi_fsgnj(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -434,7 +433,7 @@ void dpi_fsgnj(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) 
   }
 }
 
-void dpi_fsgnjn(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
+void dpi_fsgnjn(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -444,7 +443,7 @@ void dpi_fsgnjn(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result)
   }
 }
 
-void dpi_fsgnjx(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
+void dpi_fsgnjx(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -454,7 +453,7 @@ void dpi_fsgnjx(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result)
   }
 }
 
-void dpi_flt(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
+void dpi_flt(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -464,7 +463,7 @@ void dpi_flt(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, sv
   }
 }
 
-void dpi_fle(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
+void dpi_fle(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -474,7 +473,7 @@ void dpi_fle(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, sv
   }
 }
 
-void dpi_feq(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
+void dpi_feq(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -484,7 +483,7 @@ void dpi_feq(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, sv
   }
 }
 
-void dpi_fmin(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
+void dpi_fmin(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {
@@ -494,7 +493,7 @@ void dpi_fmin(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, s
   }
 }
 
-void dpi_fmax(bool enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
+void dpi_fmax(svBit enable, int dst_fmt, int64_t a, int64_t b, int64_t* result, svBitVecVal* fflags) {
   if (!enable)
     return;
   if (dst_fmt) {

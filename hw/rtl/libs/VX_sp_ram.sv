@@ -547,5 +547,11 @@ module VX_sp_ram #(
     end
 `endif
 
+`undef RAM_INITIALIZATION
+`undef RAM_RESET_BLOCK
+`undef RAM_ARRAY_WREN
+`undef RAM_WRITE_WREN
+`undef RAM_WRITE_ALL
+
 endmodule
 `TRACING_ON

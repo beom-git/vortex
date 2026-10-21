@@ -20,6 +20,12 @@ package VX_dxa_pkg;
 
     import VX_gpu_pkg::*;
 
+`ifdef SIMULATION
+`ifdef SV_DPI
+    import "DPI-C" function void dpi_trace(input int level, input string format /*verilator sformat*/);
+`endif
+`endif
+
     // DXA local-memory path: dimensioned to cover all banks in one request.
     localparam DXA_LMEM_WORD_SIZE = `VX_CFG_LMEM_NUM_BANKS * (`VX_CFG_XLEN / 8);
     localparam DXA_LMEM_ADDR_W = LMEM_DMA_ADDR_WIDTH;

@@ -617,7 +617,6 @@ module VX_rtu_core import VX_gpu_pkg::*, VX_rtu_pkg::*; #(
     wire win_fire = rtu_bus_w.win_valid && rtu_bus_w.win_ready;
 
     // ── control ───────────────────────────────────────────────────────
-    integer i;
     always_ff @(posedge clk) begin
         if (reset) begin
             tstate       <= '0;   // T_IDLE
@@ -686,7 +685,7 @@ module VX_rtu_core import VX_gpu_pkg::*, VX_rtu_pkg::*; #(
 
             // ── the CONTINUE beats ────────────────────────────────────
             if (cont_beat0) begin
-                for (i = 0; i < NUM_LANES; ++i) begin
+                for (integer i = 0; i < NUM_LANES; ++i) begin
                     cont_action[cont_slot][i] <= rtu_bus_w.req_data.cb_action[i];
                 end
                 tstate[cont_slot] <= T_CBATTR;

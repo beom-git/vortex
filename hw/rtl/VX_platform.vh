@@ -14,6 +14,9 @@
 `ifndef VX_PLATFORM_VH
 `define VX_PLATFORM_VH
 
+`define VX_CONCAT_IMPL(a, b) a``b
+`define VX_CONCAT(a, b) `VX_CONCAT_IMPL(a, b)
+
 `include "VX_scope.vh"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -29,7 +32,7 @@
 
 `define PACKAGE_ASSERT(cond) \
     /* verilator lint_on UNUSED */ \
-    typedef bit [((cond) ? 0 : -1) : 0] static_assertion_at_line_`__LINE__; \
+    typedef bit [((cond) ? 0 : -1) : 0] `VX_CONCAT(static_assertion_at_line_, `__LINE__); \
     /* verilator lint_off UNUSED */
 
 `define ERROR(msg) \
@@ -226,7 +229,7 @@
 `define STRINGIFY(x) `"x`"
 
 `define MAP_AOS_SOA(__i, __size, __lhs, __rhs) \
-    for (genvar __i = 0; __i < (__size); __i++) begin : g_map_aos_soa_`__LINE__ \
+    for (genvar __i = 0; __i < (__size); __i++) begin : `VX_CONCAT(g_map_aos_soa_, `__LINE__) \
         assign __lhs = __rhs; \
     end
 

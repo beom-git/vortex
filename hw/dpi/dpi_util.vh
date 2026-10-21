@@ -20,14 +20,14 @@
 `define INT_TYPE int
 `endif
 
-import "DPI-C" function void dpi_imul(input logic enable, input logic is_signed_a, input logic is_signed_b, input int a, input int b, output int resultl, output int resulth);
-import "DPI-C" function void dpi_lmul(input logic enable, input logic is_signed_a, input logic is_signed_b, input longint a, input longint b, output longint resultl, output longint resulth);
+import "DPI-C" function void dpi_imul(input bit enable, input bit is_signed_a, input bit is_signed_b, input int a, input int b, output int resultl, output int resulth);
+import "DPI-C" function void dpi_lmul(input bit enable, input bit is_signed_a, input bit is_signed_b, input longint a, input longint b, output longint resultl, output longint resulth);
 
-import "DPI-C" function void dpi_idiv(input logic enable, input logic is_signed, input int a, input int b, output int quotient, output int remainder);
-import "DPI-C" function void dpi_ldiv(input logic enable, input logic is_signed, input longint a, input longint b, output longint quotient, output longint remainder);
+import "DPI-C" function void dpi_idiv(input bit enable, input bit is_signed, input int a, input int b, output int quotient, output int remainder);
+import "DPI-C" function void dpi_ldiv(input bit enable, input bit is_signed, input longint a, input longint b, output longint quotient, output longint remainder);
 
 import "DPI-C" function int dpi_register();
-import "DPI-C" function void dpi_assert(int inst, input logic cond, input int delay);
+import "DPI-C" context function void dpi_assert(int inst, input logic cond, input int delay);
 
 import "DPI-C" function void dpi_trace(input int level, input string format /*verilator sformat*/);
 

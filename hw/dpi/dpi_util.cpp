@@ -19,23 +19,22 @@
 #include <iostream>
 
 #include "svdpi.h"
-#include "verilated_vpi.h"
 
 #ifndef VX_DBG_DEBUG_LEVEL
 #define VX_DBG_DEBUG_LEVEL 3
 #endif
 
 extern "C" {
-  void dpi_imul(bool enable, bool is_signed_a, bool is_signed_b, int32_t a, int32_t b, int32_t* resultl, int32_t* resulth);
-  void dpi_idiv(bool enable, bool is_signed, int32_t a, int32_t b, int32_t* quotient, int32_t* remainder);
+  void dpi_imul(svBit enable, svBit is_signed_a, svBit is_signed_b, int32_t a, int32_t b, int32_t* resultl, int32_t* resulth);
+  void dpi_idiv(svBit enable, svBit is_signed, int32_t a, int32_t b, int32_t* quotient, int32_t* remainder);
 
-  void dpi_lmul(bool enable, bool is_signed_a, bool is_signed_b, int64_t a, int64_t b, int64_t* resultl, int64_t* resulth);
-  void dpi_ldiv(bool enable, bool is_signed, int64_t a, int64_t b, int64_t* quotient, int64_t* remainder);
+  void dpi_lmul(svBit enable, svBit is_signed_a, svBit is_signed_b, int64_t a, int64_t b, int64_t* resultl, int64_t* resulth);
+  void dpi_ldiv(svBit enable, svBit is_signed, int64_t a, int64_t b, int64_t* quotient, int64_t* remainder);
 
   int dpi_register();
-  void dpi_assert(int inst, bool cond, int delay);
+  void dpi_assert(int inst, svLogic cond, int delay);
 
-  void dpi_trace(int level, const char* format, ...);
+  void dpi_trace(int level, const char* format);
   void dpi_trace_start();
   void dpi_trace_stop();
 }
@@ -97,11 +96,11 @@ int dpi_register() {
   return instances.allocate();
 }
 
-void dpi_assert(int inst, bool cond, int delay) {
+void dpi_assert(int inst, svLogic cond, int delay) {
   ShiftRegister& sr = instances.get(inst);
 
   sr.ensure_init(delay);
-  sr.push(!cond, 1);
+  sr.push(cond != sv_1, 1);
 
   auto status = sr.top();
   if (status) {
@@ -116,7 +115,7 @@ void dpi_assert(int inst, bool cond, int delay) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void dpi_imul(bool enable, bool is_signed_a, bool is_signed_b, int32_t a, int32_t b, int32_t* resultl, int32_t* resulth) {
+void dpi_imul(svBit enable, svBit is_signed_a, svBit is_signed_b, int32_t a, int32_t b, int32_t* resultl, int32_t* resulth) {
   if (!enable)
     return;
   uint64_t first  = *(uint32_t*)&a;
@@ -143,7 +142,7 @@ void dpi_imul(bool enable, bool is_signed_a, bool is_signed_b, int32_t a, int32_
   *resulth = int32_t(result >> (8 * sizeof(int32_t)));
 }
 
-void dpi_lmul(bool enable, bool is_signed_a, bool is_signed_b, int64_t a, int64_t b, int64_t* resultl, int64_t* resulth) {
+void dpi_lmul(svBit enable, svBit is_signed_a, svBit is_signed_b, int64_t a, int64_t b, int64_t* resultl, int64_t* resulth) {
   if (!enable)
     return;
   __uint128_t first  = *(uint64_t*)&a;
@@ -170,7 +169,7 @@ void dpi_lmul(bool enable, bool is_signed_a, bool is_signed_b, int64_t a, int64_
   *resulth = int64_t(result >> (8 * sizeof(int64_t)));
 }
 
-void dpi_idiv(bool enable, bool is_signed, int32_t a, int32_t b, int32_t* quotient, int32_t* remainder) {
+void dpi_idiv(svBit enable, svBit is_signed, int32_t a, int32_t b, int32_t* quotient, int32_t* remainder) {
   if (!enable)
     return;
 
@@ -201,7 +200,7 @@ void dpi_idiv(bool enable, bool is_signed, int32_t a, int32_t b, int32_t* quotie
   }
 }
 
-void dpi_ldiv(bool enable, bool is_signed, int64_t a, int64_t b, int64_t* quotient, int64_t* remainder) {
+void dpi_ldiv(svBit enable, svBit is_signed, int64_t a, int64_t b, int64_t* quotient, int64_t* remainder) {
   if (!enable)
     return;
 
@@ -236,13 +235,10 @@ void dpi_ldiv(bool enable, bool is_signed, int64_t a, int64_t b, int64_t* quotie
 
 bool sim_trace_enabled();
 
-void dpi_trace(int level, const char* format, ...) {
+void dpi_trace(int level, const char* format) {
   if (level > VX_DBG_DEBUG_LEVEL)
     return;
   if (!sim_trace_enabled())
     return;
-  va_list va;
-	va_start(va, format);
-	vprintf(format, va);
-	va_end(va);
+  fputs(format, stdout);
 }

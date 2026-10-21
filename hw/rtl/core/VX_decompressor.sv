@@ -420,6 +420,8 @@ module VX_decompressor import VX_gpu_pkg::*; #(
 
     // Stage 0 advance gate: nothing latches/updates while stage 1 is full.
     wire        st0_advance = s1_can_accept;
+    wire        have_C;
+    wire        have_B_emit;
 
     // ------------------------------------------------------------------
     // sched_buffered_match — flop-only PC compare, no BRAM dep.
@@ -463,7 +465,7 @@ module VX_decompressor import VX_gpu_pkg::*; #(
     // Priority: C (BUF_RVC emit at sched) > B (BUF_32HI emit at rsp) > D.
     // Case A (fast path) is mutually exclusive with C/B/D when state==EMPTY.
 
-    wire have_C = sched_valid
+    assign have_C = sched_valid
                && (buf_pc[sched_wid] == sched_PC)
                && (state[sched_wid] == BUF_RVC);
     // Scheduler-gated straddle emit: the follow response already arrived
@@ -472,7 +474,7 @@ module VX_decompressor import VX_gpu_pkg::*; #(
     // away. Emitting only here (never on the follow response alone) is what stops
     // a straddler sitting right after a taken branch/return from landing on a
     // wrong path.
-    wire have_B_emit = sched_valid
+    assign have_B_emit = sched_valid
                     && (buf_pc[sched_wid] == sched_PC)
                     && (state[sched_wid] == BUF_32RDY);
     // Redirect detector: a BUF_32HI warp re-presented at a PC that DIFFERS from

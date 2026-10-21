@@ -55,8 +55,8 @@ module VX_alu_muldiv import VX_gpu_pkg::*; #(
 
 `ifdef IMUL_DPI
 
-    import "DPI-C" function void dpi_imul(input logic enable, input logic is_signed_a, input logic is_signed_b, input int a, input int b, output int resultl, output int resulth);
-    import "DPI-C" function void dpi_lmul(input logic enable, input logic is_signed_a, input logic is_signed_b, input longint a, input longint b, output longint resultl, output longint resulth);
+    import "DPI-C" function void dpi_imul(input bit enable, input bit is_signed_a, input bit is_signed_b, input int a, input int b, output int resultl, output int resulth);
+    import "DPI-C" function void dpi_lmul(input bit enable, input bit is_signed_a, input bit is_signed_b, input longint a, input longint b, output longint resultl, output longint resulth);
 
     wire [NUM_LANES-1:0][`VX_CFG_XLEN-1:0] mul_result_tmp;
 
@@ -222,8 +222,8 @@ module VX_alu_muldiv import VX_gpu_pkg::*; #(
 
 `ifdef IDIV_DPI
 
-    import "DPI-C" function void dpi_idiv(input logic enable, input logic is_signed, input int a, input int b, output int quotient, output int remainder);
-    import "DPI-C" function void dpi_ldiv(input logic enable, input logic is_signed, input longint a, input longint b, output longint quotient, output longint remainder);
+    import "DPI-C" function void dpi_idiv(input bit enable, input bit is_signed, input int a, input int b, output int quotient, output int remainder);
+    import "DPI-C" function void dpi_ldiv(input bit enable, input bit is_signed, input longint a, input longint b, output longint quotient, output longint remainder);
 
     wire [NUM_LANES-1:0][`VX_CFG_XLEN-1:0] div_result_in;
     wire div_fire_in = div_valid_in && div_ready_in;
