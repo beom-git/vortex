@@ -30,7 +30,7 @@
 # Optional environment variables:
 #   SAIF_INST       Instance path prefix to strip from SAIF signal names so they
 #                   match the synthesized netlist hierarchy.  E.g.:
-#                     DUT flow: TOP.rtlsim_shim.vortex
+#                     DUT flow: TOP.testbench.dut.vortex
 #                     XRT flow: TOP.vortex_afu_shim.vortex_afu
 #                   Leave unset if the SAIF root scope already matches.
 #                   If left unset, the script will attempt to auto-detect this.

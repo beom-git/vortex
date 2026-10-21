@@ -49,7 +49,7 @@ CFLAGS += $(RTL_INCLUDE)
 # SAIF_FILE : path to the SAIF file produced by rtlsim with SAIF=1 (required for 'power' target)
 # SAIF_INST : instance path of the DUT inside the simulation hierarchy, used to
 #             strip the testbench prefix from SAIF signal names so they align with
-#             the synthesized netlist (e.g. "TOP.rtlsim_shim.vortex").
+#             the synthesized netlist (e.g. "TOP.testbench.dut.vortex").
 #             Leave empty when the SAIF root scope already matches the top module.
 SAIF_FILE ?=
 SAIF_INST ?=
@@ -72,7 +72,7 @@ endif
 
 # Re-run power analysis on an existing post-implementation checkpoint.
 # Requires SAIF_FILE=<path>.  Does not rebuild the design.
-# Example: make power SAIF_FILE=/path/to/trace.saif SAIF_INST=TOP.rtlsim_shim.vortex
+# Example: make power SAIF_FILE=/path/to/trace.saif SAIF_INST=TOP.testbench.dut.vortex
 power:
 	@if [ ! -f post_impl.dcp ]; then \
 	  echo "ERROR: post_impl.dcp not found. Run 'make build' first."; exit 1; \

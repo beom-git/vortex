@@ -224,3 +224,55 @@ Running Vortex simulators with different configurations and drivers is supported
 - Run dogfood driver test with simx driver and Vortex config of 4 cluster, 4 cores, 8 warps, 6 threads
 
     $ ./ci/blackbox.sh --driver=simx --clusters=4 --cores=4 --warps=8 --threads=6  --app=dogfood
+
+## RTL simulator engines
+
+Run from a configured build directory. Verilator remains the default:
+
+```bash
+../configure --xlen=32 --tooldir=/path/to/tools
+make -C sim/rtlsim SIMULATOR=verilator
+make -C sim/rtlsim SIMULATOR=vcs
+./sim/rtlsim/rtlsim path/to/program.elf
+```
+
+Load the VCS environment before selecting VCS so that `vcs` is on `PATH`.
+VCS requires Linux and a runtime license. `THREADS` defaults to 4.
+
+Select the engine for host runtime tests through the same variable:
+
+```bash
+SIMULATOR=vcs ./ci/blackbox.sh --driver=rtlsim --app=basic --args="-n16"
+```
+
+Run the shared protocol and runtime checks with:
+
+```bash
+make -C tests/rtlsim run SIMULATOR=verilator
+make -C tests/rtlsim run SIMULATOR=vcs
+make -C tests/rtlsim check-shared-ram
+make -C tests/rtlsim check-vcs-runtime SIMULATOR=vcs
+```
+
+For VCS FSDB output, load compatible VCS and Verdi environments so that
+`VERDI_HOME` points to the Verdi installation:
+
+```bash
+make -C sim/rtlsim SIMULATOR=vcs FSDB=1
+FSDB_FILE=trace.fsdb ./sim/rtlsim/rtlsim tests/riscv/upstream/isa/rv32ui-p-add
+
+SIMULATOR=vcs FSDB=1 FSDB_FILE=host.fsdb \
+  ./ci/blackbox.sh --driver=rtlsim --app=basic --args="-n16"
+```
+
+`FSDB_FILE` defaults to `trace.fsdb`. FSDB output is available only with VCS.
+
+Native VCS `SAIF=1` is disabled because hierarchy traversal fails in
+W-2024.09-SP1. To generate SAIF, capture VCD and convert it with the separately
+installed Synopsys `vcd2saif` tool:
+
+```bash
+make -C sim/rtlsim SIMULATOR=vcs VCD=1
+VCD_FILE=trace.vcd ./sim/rtlsim/rtlsim tests/riscv/upstream/isa/rv32ui-p-add
+vcd2saif -input trace.vcd -output trace.saif -instance vcs_top.bench
+```

@@ -19,7 +19,7 @@ PREFIX=smoke1 make top
 PREFIX=fast OPT_LEVEL=0 make core
 
 # re-run power analysis on an existing dut build (no resynthesis)
-PREFIX=smoke1 SAIF_FILE=<trace>.saif SAIF_INST=TOP.rtlsim_shim.vortex make core-power
+PREFIX=smoke1 SAIF_FILE=<trace>.saif SAIF_INST=TOP.testbench.dut.vortex make core-power
 
 # build FPGA
 PREFIX=build_base_1c NUM_CORES=1 TARGET=hw_emu PLATFORM=xilinx_u55c_gen3x16_xdma_3_202210_1 make > build_u55c_hw_emu_base_1c.log 2>&1 &

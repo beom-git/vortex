@@ -149,7 +149,7 @@ Typical values:
 
 | Flow | SAIF_INST |
 |------|-----------|
-| Xilinx DUT | `TOP.rtlsim_shim.vortex` |
+| Xilinx DUT | `TOP.testbench.dut.vortex` |
 | Xilinx XRT | `TOP.vortex_afu_shim.vortex_afu` |
 | Synopsys / Yosys | Instance path matching your simulation hierarchy |
 

@@ -59,7 +59,7 @@ ecall/ebreak/mret per warp. The old "kill all warps"
 [`sim/common/host_monitor.{h,cpp}`](../../sim/common/host_monitor.cpp)
 (an HTIF `tohost` watcher) are wired identically into both simulators'
 main loops ([`sim/simx/main.cpp:119-216`](../../sim/simx/main.cpp#L119),
-[`sim/rtlsim/main.cpp:92-131`](../../sim/rtlsim/main.cpp#L92)) with
+[`sim/rtlsim/common/program.cpp:94-133`](../../sim/rtlsim/common/program.cpp#L94)) with
 HTIF-takes-precedence exit codes. This is what lets the upstream
 riscv-tests (now cloned/built via `RISCV_TESTS_STAMP`, not checked in) run
 on Vortex; the 616 checked-in `.bin` files and the
