@@ -126,7 +126,7 @@ void L2Tlb::on_tick() {
     const TlbRsp& rsp = PtwRspIn.peek();
     uint32_t id = rsp.slot;
     // Dropping a fill would strand every L1 miss station attached to it.
-    __assert(id < mshr_.size() && mshr_[id].valid,
+    VX_ASSERT(id < mshr_.size() && mshr_[id].valid,
              "walker fill does not match an outstanding entry");
     if (!rsp.fault) {
       fill(mshr_[id].vpn, rsp.ppn, rsp.flags, rsp.level);

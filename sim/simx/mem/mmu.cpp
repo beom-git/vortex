@@ -188,7 +188,7 @@ void Mmu::on_tick() {
     const TlbRsp& rsp = TlbFillIn.peek();
     int id = (int)rsp.slot;
     // Dropping a fill would leave its parked requests waiting forever.
-    __assert(id >= 0 && id < (int)mshr_.size() && mshr_[id].valid,
+    VX_ASSERT(id >= 0 && id < (int)mshr_.size() && mshr_[id].valid,
              "TLB fill does not match an outstanding miss");
     uint64_t page_mask = (uint64_t(1) << VX_VM_PAGE_LOG2_SIZE) - 1;
     uint32_t shift = rsp.level * TLB_VPN_LEVEL_BITS;

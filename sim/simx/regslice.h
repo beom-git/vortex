@@ -43,7 +43,7 @@ public:
     , Out(this)
     , delay_(delay)
     , credits_(-1) {
-    __assert(delay >= 1, "boundary stage requires a registered delay");
+    VX_ASSERT(delay >= 1, "boundary stage requires a registered delay");
     Out.mark_boundary();
   }
 
@@ -56,7 +56,7 @@ protected:
   }
 
   void on_tick() {
-    __assert(credits_ >= 0, "boundary credit underflow");
+    VX_ASSERT(credits_ >= 0, "boundary credit underflow");
     if (!In.empty() && credits_ > 0) {
       Out.send(In.peek(), delay_);
       --credits_;
@@ -77,7 +77,7 @@ private:
       endpoint = endpoint->sink();
     }
     // A full credit refill assumes no stale packets hold downstream slots.
-    __assert(endpoint->size() == 0, "boundary refill with stale downstream packets");
+    VX_ASSERT(endpoint->size() == 0, "boundary refill with stale downstream packets");
     credits_ = static_cast<int32_t>(Out.capacity());
     endpoint->pop_callback([this]() {
       // Credit returns to the producing domain with one cycle of latency

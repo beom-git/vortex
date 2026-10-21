@@ -732,7 +732,7 @@ public:
     // cycle with one less delay, landing on the same absolute cycle. All
     // channel state is thereby touched only by its owning thread.
     if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      VX_ASSERT(delay >= 1, "cross-domain send requires a registered delay");
       // Boxed: keeps the capture pointer-sized for any packet type; boundary
       // traffic is a handful of packets per cycle.
       platform.cross_call(this->endpoint()->module_->domain(),
@@ -754,7 +754,7 @@ public:
     }
     auto& platform = SimPlatform::instance();
     if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      VX_ASSERT(delay >= 1, "cross-domain send requires a registered delay");
       platform.cross_call(this->endpoint()->module_->domain(),
         [this, p = std::make_shared<Pkt>(std::move(pkt)), delay]() {
           this->send(*p, delay - 1);
@@ -785,18 +785,18 @@ public:
 
   const Pkt& peek() const {
     this->assert_endpoint();
-    __assert(!this->queue_empty(), "channel is empty");
+    VX_ASSERT(!this->queue_empty(), "channel is empty");
     return this->queue_front();
   }
 
   void pop() {
     this->assert_endpoint();
-    __assert(!this->queue_empty(), "channel is empty");
+    VX_ASSERT(!this->queue_empty(), "channel is empty");
     this->queue_pop();
   }
 
   [[nodiscard]] bool try_pop(Pkt* out) {
-    __assert(out != nullptr, "output target is null");
+    VX_ASSERT(out != nullptr, "output target is null");
     if (this->empty()) return false;
     *out = this->peek();
     this->pop();
@@ -839,7 +839,7 @@ protected:
       }
       return;
     }
-    __assert(pending_count_ > 0, "pending count underflow");
+    VX_ASSERT(pending_count_ > 0, "pending count underflow");
     --pending_count_;
     this->queue_push(pkt);
   }
@@ -848,14 +848,14 @@ private:
   bool forwarded() const { return sink_ != nullptr; }
 
   void bind_setup(SimChannelBase* sink) {
-    __assert(sink != nullptr, "bind target is null");
-    __assert(sink_ == nullptr, "channel already bound");
+    VX_ASSERT(sink != nullptr, "bind target is null");
+    VX_ASSERT(sink_ == nullptr, "channel already bound");
     sink_ = sink;
     sink->source_ = this;
   }
 
   void assert_endpoint() const {
-    __assert(!forwarded(), "cannot read from a forwarded channel");
+    VX_ASSERT(!forwarded(), "cannot read from a forwarded channel");
   }
 
   uint32_t occupancy() const { return this->queue_size() + pending_count_; }
@@ -873,7 +873,7 @@ private:
   void queue_push(const Pkt& pkt) {
     // High-water check: with back-pressure disabled a feedback loop that
     // outruns its consumer must fail loudly instead of growing silently.
-    __assert(storage_.size() < (1u << 20), "functional channel high-water exceeded");
+    VX_ASSERT(storage_.size() < (1u << 20), "functional channel high-water exceeded");
     storage_.push_back(pkt);
   }
 
@@ -939,16 +939,16 @@ public:
 
   // Sender end: wire to the receiving end.
   void bind(SimEventLink<Msg>* sink) {
-    __assert(sink != nullptr, "bind target is null");
-    __assert(sink_ == nullptr && !handler_, "link end already bound");
+    VX_ASSERT(sink != nullptr, "bind target is null");
+    VX_ASSERT(sink_ == nullptr && !handler_, "link end already bound");
     sink_ = sink;
   }
 
   // Receiver end: bind the member-function handler invoked on delivery.
   template <typename Impl>
   void bind(Impl* obj, void (Impl::*handler)(const Msg&)) {
-    __assert(obj != nullptr, "handler object is null");
-    __assert(sink_ == nullptr && !handler_, "link end already bound");
+    VX_ASSERT(obj != nullptr, "handler object is null");
+    VX_ASSERT(sink_ == nullptr && !handler_, "link end already bound");
     handler_ = [obj, handler](const Msg& msg) { (obj->*handler)(msg); };
   }
 
@@ -956,9 +956,9 @@ public:
   // context at the next cycle (unit latency — any declared delay collapses).
   // Cannot fail and cannot be refused.
   void send(const Msg& msg, uint64_t delay = 1) {
-    __assert(delay >= 1, "event link delivery requires a registered delay");
+    VX_ASSERT(delay >= 1, "event link delivery requires a registered delay");
     auto* ep = this->endpoint();
-    __assert(!!ep->handler_, "event link has no bound handler");
+    VX_ASSERT(!!ep->handler_, "event link has no bound handler");
     SimPlatform::instance().cross_call(ep->module_->domain(),
       [ep, msg]() {
         ep->handler_(msg);
@@ -1087,7 +1087,7 @@ void SimPlatform::schedule(SimChannel<Pkt>* channel, const Pkt& pkt, uint64_t de
   if (delay == 0) {
     // Same-cycle delivery is legal only within one domain (or from host
     // context between cycles) — a cross-domain edge must be registered.
-    __assert(tl_exec_domain_ == HOST_DOMAIN
+    VX_ASSERT(tl_exec_domain_ == HOST_DOMAIN
         || &dom == &domain_at(tl_exec_domain_), "cross-domain delta send");
     auto evt = new SimChannelEvent<Pkt>(channel, pkt, dom.delta);
     dom.imm.push_back(evt);
@@ -1102,7 +1102,7 @@ template <typename Pkt>
 void SimPlatform::schedule(SimChannel<Pkt>* channel, Pkt&& pkt, uint64_t delay) {
   auto& dom = domain_at(channel->endpoint()->module_->domain_);
   if (delay == 0) {
-    __assert(tl_exec_domain_ == HOST_DOMAIN
+    VX_ASSERT(tl_exec_domain_ == HOST_DOMAIN
         || &dom == &domain_at(tl_exec_domain_), "cross-domain delta send");
     auto evt = new SimChannelEvent<Pkt>(channel, std::move(pkt), dom.delta);
     dom.imm.push_back(evt);
@@ -1116,7 +1116,7 @@ void SimPlatform::schedule(SimChannel<Pkt>* channel, Pkt&& pkt, uint64_t delay) 
 
 template <typename Pkt, typename Func>
 void SimPlatform::schedule(Func&& func, const Pkt& pkt, uint64_t delay, uint32_t domain) {
-  __assert(delay != 0, "scheduled callbacks require a registered delay");
+  VX_ASSERT(delay != 0, "scheduled callbacks require a registered delay");
   // Unit latency: declared callback latencies collapse like channel delays.
   auto& dom = domain_at(domain);
   uint64_t fire_cycle = this->cycles() + 1;

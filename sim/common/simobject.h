@@ -716,7 +716,7 @@ public:
     // needs no check here — cross-domain producers are credit-gated at the
     // boundary, so a deferred send always finds space.
     if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      VX_ASSERT(delay >= 1, "cross-domain send requires a registered delay");
       // Boxed: keeps the capture pointer-sized for any packet type; boundary
       // traffic is a handful of packets per cycle.
       platform.cross_call(this->endpoint()->module_->domain(),
@@ -725,7 +725,7 @@ public:
         });
       return;
     }
-    __assert(!this->full(), "channel is full");
+    VX_ASSERT(!this->full(), "channel is full");
     if (platform.audit_enabled()) {
       platform.audit_send(this, delay);
     }
@@ -736,14 +736,14 @@ public:
   void send(Pkt&& pkt, uint64_t delay = 1) {
     auto& platform = SimPlatform::instance();
     if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      VX_ASSERT(delay >= 1, "cross-domain send requires a registered delay");
       platform.cross_call(this->endpoint()->module_->domain(),
         [this, p = std::make_shared<Pkt>(std::move(pkt)), delay]() {
           this->send(*p, delay - 1);
         });
       return;
     }
-    __assert(!this->full(), "channel is full");
+    VX_ASSERT(!this->full(), "channel is full");
     if (platform.audit_enabled()) {
       platform.audit_send(this, delay);
     }
@@ -770,18 +770,18 @@ public:
 
   const Pkt& peek() const {
     this->assert_endpoint();
-    __assert(!this->queue_empty(), "channel is empty");
+    VX_ASSERT(!this->queue_empty(), "channel is empty");
     return this->queue_front();
   }
 
   void pop() {
     this->assert_endpoint();
-    __assert(!this->queue_empty(), "channel is empty");
+    VX_ASSERT(!this->queue_empty(), "channel is empty");
     this->queue_pop();
   }
 
   [[nodiscard]] bool try_pop(Pkt* out) {
-    __assert(out != nullptr, "output target is null");
+    VX_ASSERT(out != nullptr, "output target is null");
     if (this->empty()) return false;
     *out = this->peek();
     this->pop();
@@ -825,7 +825,7 @@ protected:
       }
       return;
     }
-    __assert(pending_count_ > 0, "pending count underflow");
+    VX_ASSERT(pending_count_ > 0, "pending count underflow");
     --pending_count_;
     this->queue_push(pkt);
   }
@@ -834,14 +834,14 @@ private:
   bool forwarded() const { return sink_ != nullptr; }
 
   void bind_setup(SimChannelBase* sink) {
-    __assert(sink != nullptr, "bind target is null");
-    __assert(sink_ == nullptr, "channel already bound");
+    VX_ASSERT(sink != nullptr, "bind target is null");
+    VX_ASSERT(sink_ == nullptr, "channel already bound");
     sink_ = sink;
     sink->source_ = this;
   }
 
   void assert_endpoint() const {
-    __assert(!forwarded(), "cannot read from a forwarded channel");
+    VX_ASSERT(!forwarded(), "cannot read from a forwarded channel");
   }
 
   uint32_t occupancy() const { return this->queue_size() + pending_count_; }
@@ -921,25 +921,25 @@ public:
 
   // Sender end: wire to the receiving end.
   void bind(SimEventLink<Msg>* sink) {
-    __assert(sink != nullptr, "bind target is null");
-    __assert(sink_ == nullptr && !handler_, "link end already bound");
+    VX_ASSERT(sink != nullptr, "bind target is null");
+    VX_ASSERT(sink_ == nullptr && !handler_, "link end already bound");
     sink_ = sink;
   }
 
   // Receiver end: bind the member-function handler invoked on delivery.
   template <typename Impl>
   void bind(Impl* obj, void (Impl::*handler)(const Msg&)) {
-    __assert(obj != nullptr, "handler object is null");
-    __assert(sink_ == nullptr && !handler_, "link end already bound");
+    VX_ASSERT(obj != nullptr, "handler object is null");
+    VX_ASSERT(sink_ == nullptr && !handler_, "link end already bound");
     handler_ = [obj, handler](const Msg& msg) { (obj->*handler)(msg); };
   }
 
   // Fire-and-forget delivery: the endpoint handler runs in its module's
   // context at cycle C + delay. Cannot fail and cannot be refused.
   void send(const Msg& msg, uint64_t delay = 1) {
-    __assert(delay >= 1, "event link delivery requires a registered delay");
+    VX_ASSERT(delay >= 1, "event link delivery requires a registered delay");
     auto* ep = this->endpoint();
-    __assert(!!ep->handler_, "event link has no bound handler");
+    VX_ASSERT(!!ep->handler_, "event link has no bound handler");
     SimPlatform::instance().cross_call(ep->module_->domain(),
       [ep, msg, delay]() {
         if (delay > 1) {
@@ -1072,7 +1072,7 @@ void SimPlatform::schedule(SimChannel<Pkt>* channel, const Pkt& pkt, uint64_t de
   if (delay == 0) {
     // Same-cycle delivery is legal only within one domain (or from host
     // context between cycles) — a cross-domain edge must be registered.
-    __assert(tl_exec_domain_ == HOST_DOMAIN
+    VX_ASSERT(tl_exec_domain_ == HOST_DOMAIN
         || &dom == &domain_at(tl_exec_domain_), "cross-domain delta send");
     auto evt = new SimChannelEvent<Pkt>(channel, pkt, dom.delta);
     dom.imm.push_back(evt);
@@ -1087,7 +1087,7 @@ template <typename Pkt>
 void SimPlatform::schedule(SimChannel<Pkt>* channel, Pkt&& pkt, uint64_t delay) {
   auto& dom = domain_at(channel->endpoint()->module_->domain_);
   if (delay == 0) {
-    __assert(tl_exec_domain_ == HOST_DOMAIN
+    VX_ASSERT(tl_exec_domain_ == HOST_DOMAIN
         || &dom == &domain_at(tl_exec_domain_), "cross-domain delta send");
     auto evt = new SimChannelEvent<Pkt>(channel, std::move(pkt), dom.delta);
     dom.imm.push_back(evt);
@@ -1101,7 +1101,7 @@ void SimPlatform::schedule(SimChannel<Pkt>* channel, Pkt&& pkt, uint64_t delay) 
 
 template <typename Pkt, typename Func>
 void SimPlatform::schedule(Func&& func, const Pkt& pkt, uint64_t delay, uint32_t domain) {
-  __assert(delay != 0, "scheduled callbacks require a registered delay");
+  VX_ASSERT(delay != 0, "scheduled callbacks require a registered delay");
   auto& dom = domain_at(domain);
   uint64_t fire_cycle = this->cycles() + delay;
   auto evt = new SimCallEvent<Pkt>(std::forward<Func>(func), pkt, fire_cycle);

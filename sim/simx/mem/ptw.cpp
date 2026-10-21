@@ -139,7 +139,7 @@ void Ptw::on_tick() {
     uint32_t wid = rsp.tag;
     // A PTE response that matches no waiting walker cannot be recovered:
     // the walker it belonged to would wait forever and hang the launch.
-    __assert(wid < walkers_.size() && walkers_[wid].state == W_WAIT,
+    VX_ASSERT(wid < walkers_.size() && walkers_[wid].state == W_WAIT,
              "PTE response does not match a waiting walker");
     on_pte_response(walkers_[wid], rsp);
     MemRspIn.pop();
@@ -212,7 +212,7 @@ void Ptw::on_tick() {
   if (!ReqIn.empty()) {
     // Without a root there is nothing to walk and the request would sit
     // here forever, stalling the miss station that owns it.
-    __assert(satp_ != nullptr, "walk requested before the page-table root was set");
+    VX_ASSERT(satp_ != nullptr, "walk requested before the page-table root was set");
     for (auto& w : walkers_) {
       if (w.state != W_IDLE) {
         continue;
@@ -264,7 +264,7 @@ void PtwMux::on_tick() {
   if (!RspIn.empty()) {
     TlbRsp rsp = RspIn.peek();
     uint32_t input = rsp.slot >> SLOT_BITS;
-    __assert(input < num_inputs_, "PtwMux fill routes to a missing input");
+    VX_ASSERT(input < num_inputs_, "PtwMux fill routes to a missing input");
     if (!RspOut.at(input).full()) {
       rsp.slot &= (1u << SLOT_BITS) - 1;
       RspOut.at(input).send(rsp, 1);
@@ -282,7 +282,7 @@ void PtwMux::on_tick() {
       continue;
     }
     TlbReq req = ReqIn.at(g).peek();
-    __assert(req.slot < (1u << SLOT_BITS), "L2-TLB slot overflows the mux id space");
+    VX_ASSERT(req.slot < (1u << SLOT_BITS), "L2-TLB slot overflows the mux id space");
     req.slot |= g << SLOT_BITS;   // report_only fills nothing; encoding is harmless
     ReqOut.send(req, 1);
     ReqIn.at(g).pop();
