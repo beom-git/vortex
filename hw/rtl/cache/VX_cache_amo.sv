@@ -404,15 +404,18 @@ module VX_cache_amo import VX_gpu_pkg::*; #(
             assign wbq_word_hit[i] = (| wbq_lane_hit[i]);
         end
 
+        // Bubble keys may be unknown; valid requests require known matching hits.
         for (genvar i = 0; i < WBQ_SIZE; ++i) begin : g_key_check
             for (genvar l = 0; l < NUM_LANES; ++l) begin : g_lane
-                `RUNTIME_ASSERT (wbq_lane_hit[i][l] == ((WBQ_CNTW'(i) < wbq_count) && wbq_key_st1[i]
-                                                     && (wbq_lane[i] == LANE_IDXW'(l))),
+                `RUNTIME_ASSERT ((wbq_lane_hit[i][l] === ((WBQ_CNTW'(i) < wbq_count) && wbq_key_st1[i]
+                                                      && (wbq_lane[i] == LANE_IDXW'(l))))
+                              && (~valid_st1 || !$isunknown(wbq_lane_hit[i][l])),
                     ("%t: AMO writeback-queue key match out of sync (slot=%0d)", $time, i))
             end
         end
         for (genvar l = 0; l < NUM_LANES; ++l) begin : g_post_check
-            `RUNTIME_ASSERT (post_lane_hit[l] == (post_wb_valid && post_key_st1 && (post_wb_lane == LANE_IDXW'(l))),
+            `RUNTIME_ASSERT ((post_lane_hit[l] === (post_wb_valid && post_key_st1 && (post_wb_lane == LANE_IDXW'(l))))
+                          && (~valid_st1 || !$isunknown(post_lane_hit[l])),
                 ("%t: AMO settling-entry key match out of sync", $time))
         end
 
@@ -727,8 +730,10 @@ module VX_cache_amo import VX_gpu_pkg::*; #(
                                                  ? BIT_OFF_BITS'({lane_st1, bit_off_st1})
                                                  : BIT_OFF_BITS'(bit_off_st1);
         wire [WORD_WIDTH-1:0] amo_old_inplace = read_word_fwd_st1 & rsp_byte_mask;
+        // Miss data may be unknown; a hit must return known enabled bytes.
         `RUNTIME_ASSERT (~(amo_st1.amo_valid && valid_st1 && is_creq_st1)
-                      || (amo_old_inplace == ({NUM_LANES{line_lane_st1}} & rsp_byte_mask)),
+                      || ((amo_old_inplace === ({NUM_LANES{line_lane_st1}} & rsp_byte_mask))
+                          && (~is_hit_st1 || !$isunknown(amo_old_inplace))),
             ("%t: AMO in-place old value differs from its lane", $time))
         wire [WORD_WIDTH-1:0] sc_rsp_inplace  = WORD_WIDTH'(sc_fail_st1) << full_bit_off_st1;
 
